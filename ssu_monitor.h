@@ -4,7 +4,17 @@
 #include<string.h>
 #include<signal.h>
 #include<dirent.h>
+#include<sys/stat.h>
+#include<sys/types.h>
+#include<time.h>
 #define BUFLEN 1024
+
+typedef struct Node
+{
+	char path[BUFLEN];
+	time_t mtime;
+	struct Node *next;
+} Node;
 
 void ssu_monitor(int argc, char *argv[]);
 void ssu_prompt(int argc, char *argv[]);
@@ -23,3 +33,7 @@ void print_tree(tree *node);
 void free_tree(tree *cur);
 void signal_handler(int signum);
 int scandir_filter(const struct dirent *file);
+void monitoring(char *dirpath);
+Node *find_node(char *path);
+void push_node(char *path, time_t mtime);
+void remove_node(char *path);

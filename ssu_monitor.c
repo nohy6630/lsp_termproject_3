@@ -4,6 +4,7 @@ FILE *log_fp;
 char *ID = "20192492";
 char *monitor_list = "monitor_list.txt";
 volatile sig_atomic_t signal_received = 0;
+Node *head = NULL;
 
 int main(int argc, char *argv[])
 {
@@ -95,7 +96,10 @@ void execute_exit(int argc, char *argv[]) {
 
 }
 
-void init_daemon(char *dirpath, time_t mn_time) {
+void init_daemon(char *dirpath, time_t mn_time)
+{
+	char buf[BUFLEN];
+
 	if ((pid = fork()) < 0)
 	{
 		fprintf(stderr, "fork error\n");
@@ -107,13 +111,15 @@ void init_daemon(char *dirpath, time_t mn_time) {
 			fprintf(stderr, "getpid error\n");
 			exit(1);
 		}
-
-		while (!signal_received)//SIGKILL
+		signal(SIGUSR1, signal_handler);
+		sprintf(buf, "%s/log.txt", dirpath)
+		log_fp = fopen(buf, "a");
+		while (!signal_received)
 		{
-			//모니터링
-
+			monitoring(dirpath);
+			sleep(mn_time);
 		}
-
+		fclose(log_fp);
 		printf("monitoring ended (%s)\n", dirpath);
 		exit(0);
 	}
@@ -208,4 +214,67 @@ int scandir_filter(const struct dirent *file) {
 	}
 	else
 		return 1;
+}
+
+void monitoring(char *dirpath)
+{
+	char dirent **filelist;
+	int cnt=scandir(dirpath, &filelist, scandir_filter, alphasort);
+	char buf[BUFLEN];
+	char curtime[50];
+	char modifytime[50];
+	struct stat statbuf;
+	struct tm *tm_p;
+	time_t now;
+
+	if(cnt < 0)
+	{
+		fprintf(stderr, "scandir error\n");
+		exit(1);
+	}
+	for(int i = 0; i < cnt; i++)
+	{
+		sprintf(buf,"%s/%s",dirpath,filelist[cnt]->d_name);
+		stat(buf, statbuf);
+		time(&now);
+		tm_p = localtime(&now);
+		sprintf(curtime, "%02d-%02d-%02d %02d:%02d:%02d",
+							tm_p->tm_year + 1900,
+							tm_p->tm_mon + 1,
+							tm_p->tm_mday,
+							tm_p->tm_hour,
+							tm_p->tm_min,
+							tm_p->tm_sec);		
+		Node *node = find_node(buf);
+		if(buf == NULL)
+		{
+			push_node(buf, statbuf.st_mtime);
+			fprintf(log_fp, "[%s][create][%s]\n", curtime, buf);
+		}
+		else
+		{
+			if(node->mtime != statbuf.st_mtime)
+			{
+				node->mtime = statbuf.st_mtime;
+				tm_p = localtime(&node->mtime);
+				sprintf(modifytime, "%02d-%02d-%02d %02d:%02d:%02d",
+                            tm_p->tm_year + 1900,
+                            tm_p->tm_mon + 1,
+                            tm_p->tm_mday,
+                            tm_p->tm_hour,
+                            tm_p->tm_min,
+                            tm_p->tm_sec);
+				fprintf(log_fp, "[%s][modify][%s]\n", modifytime, buf);
+			}
+		}
+	}
+	Node *cur = head;
+	while(cur != NULL)
+	{
+		if(access(cur->path, F_OK) != 0)
+		{
+			fprintf(log_fp, "[%s][remove][%s]\n", curtime, cur->path);
+		}
+		cur = cur->next;
+	}
 }
