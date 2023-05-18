@@ -1,45 +1,80 @@
+#include"ssu_monitor.h"
 
 FILE *log_fp;
-char *ID = "20230000";
+char *ID = "20192492";
 char *monitor_list = "monitor_list.txt";
 volatile sig_atomic_t signal_received = 0;
 
-void ssu_monitor(int argc, char *argv[]) {
-	ssu_prompt();
-	return;
+int main(int argc, char *argv[])
+{
+    ssu_monitor(argc,argv);
+    return 0;
 }
 
-void ssu_prompt(void) {
-	while (1) {
+
+void ssu_monitor(int argc, char *argv[]) {
+    ssu_prompt();
+    return;
+}
+
+void ssu_prompt(void)
+{
+	char command[BUFLEN];
+	char* argv[100];
+	int argc;
+
+    while (1)
+    {
 		printf("%s> ", ID);
 		fgets(command, BUFLEN, stdin);
-		if (execute_command(argc, argv) == 1)
-	}
+		argc = 0;
+		char *token = strtok(command," ");
+		while(token != NULL)
+		{
+			argv[argc++] = token;
+			token = strtok(NULL," ");
+		}
+		if(execute_command(argc, argv) == 1)
+			return;
+    }
 }
 
-int execute_command(int argc, char *argv[]) {
-	if (!strcmp(argv[0], "add")) {
+int execute_command(int argc, char *argv[]) 
+{
+	if (!strcmp(argv[0], "add")) 
+	{
 		execute_add(argc, argv);
-	} else if (!strcmp(argv[0], "delete")) {
+	} 
+	else if (!strcmp(argv[0], "delete")) 
+	{
 		execute_delete(argc, argv);	
-	} else if (!strcmp(argv[0], "tree")) {
+	} 
+	else if (!strcmp(argv[0], "tree")) 
+	{
 		execute_tree(argc, argv);
-	} else if (!strcmp(argv[0], "help")) {
+	} 
+	else if (!strcmp(argv[0], "help")) 
+	{
 		execute_help(argc, argv);	
-	} else if (!strcmp(argv[0], "exit")) {
+	} 
+	else if (!strcmp(argv[0], "exit")) 
+	{
 		execute_exit(argc, argv);
 		return 1;
-	} else {
+	} 
+	else 
+	{
 		fprintf(stderr, "wrong command in prompt\n");
 		execute_help(argc, argv);
 	}
 	return 0;
 }
 
-void execute_add(int argc, char *argv[]) {
-
+void execute_add(int argc, char *argv[])
+{
+	char real_path[BUFLEN];
+	realpath(argv[1],real_path);
 	init_daemon(real_path, mn_time);
-
 	printf("monitoring started (%s)\n", real_path);
 	return;
 }
@@ -61,15 +96,21 @@ void execute_exit(int argc, char *argv[]) {
 }
 
 void init_daemon(char *dirpath, time_t mn_time) {
-	if ((pid = fork()) < 0) {
-		
+	if ((pid = fork()) < 0)
+	{
+		fprintf(stderr, "fork error\n");
 	}
-	else if (pid == 0) { //child
-		if ((dpid = (make_daemon())) < 0) {
-
+	else if (pid == 0)
+	{
+		if ((dpid = (make_daemon())) < 0) 
+		{
+			fprintf(stderr, "getpid error\n");
+			exit(1);
 		}
 
-		while (!signal_received) {
+		while (!signal_received)//SIGKILL
+		{
+			//모니터링
 
 		}
 
@@ -80,7 +121,8 @@ void init_daemon(char *dirpath, time_t mn_time) {
 		return;
 }
 
-pid_t make_daemon(void) {
+pid_t make_daemon(void) 
+{
 	pid_t pid;
 	int fd, maxfd;
 
@@ -102,15 +144,16 @@ pid_t make_daemon(void) {
 	
 	umask(0);
 	//	chdir("/");
-	fd = open("/dev/null", O_RDWR);
-	dup(0);
-	dup(0);
+	fd = open("/dev/null", O_RDWR);//stdin무시
+	dup(0);//stdout무시
+	dup(0);//stderr무시
 	
 	return getpid();
 }
 
 
-tree *create_node(char *path, mode_t mode, time_t mtime) {
+tree *create_node(char *path, mode_t mode, time_t mtime) 
+{
 	tree *new;
 
 	new = (tree *)malloc(sizeof(tree));
