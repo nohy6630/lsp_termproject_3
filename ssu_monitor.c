@@ -73,7 +73,27 @@ int execute_command(int argc, char *argv[])
 
 void execute_add(int argc, char *argv[])
 {
+	int c;
 	char real_path[BUFLEN];
+	time_t mn_time;
+
+	while((c = getopt(argc, argv, "t:")) != -1)
+	{
+		switch(c)
+		{
+			case 't':
+				mn_time = atoi(optarg);
+				if(mn_time == 0)
+				{
+					fprintf(stderr, "mntime is 0 OR atoi error\n");
+					return;
+				}
+				break;
+			case '?':
+				fprintf(stderr, "argv option error\n");
+				return;
+		}
+	}
 	realpath(argv[1],real_path);
 	init_daemon(real_path, mn_time);
 	printf("monitoring started (%s)\n", real_path);
@@ -81,7 +101,25 @@ void execute_add(int argc, char *argv[])
 }
 
 void execute_delete(int argc, char *argv[]) {
+	char *tmp_file=".delete_tmp";
+	FILE* fp = fopen(monitor_list, "r");
+	FILE* wfp = fopen(tmp_file, "w");
+	char buf[BUFLEN];
+	pid_t input_pid= atoi(argv[1]);
 
+	while(fgets(buf, BUFLEN, fp) != NULL)
+	{
+
+		strtok(buf, " ");
+		pid_t pid = atoi(strtok(NULL, " "));
+		if(pid == input_pid)
+			kill(pid, SIGUSR1);
+		else
+			fprintf(wfp, "%s", buf);
+	}
+	close(fp);
+	close(wfp);
+	rename(tmp_file, monitor_list);
 }	
 
 void execute_tree(int argc, char *argv[]) {
@@ -99,6 +137,7 @@ void execute_exit(int argc, char *argv[]) {
 void init_daemon(char *dirpath, time_t mn_time)
 {
 	char buf[BUFLEN];
+	FILE *monitor_fp;
 
 	if ((pid = fork()) < 0)
 	{
@@ -112,6 +151,9 @@ void init_daemon(char *dirpath, time_t mn_time)
 			exit(1);
 		}
 		signal(SIGUSR1, signal_handler);
+		monitor_fp = fopen(monitor_list, "a");
+		fprintf(monitor_fp, "%s %d\n", dirpath, dpid);
+		fclose(monitor_fp);
 		sprintf(buf, "%s/log.txt", dirpath)
 		log_fp = fopen(buf, "a");
 		while (!signal_received)
