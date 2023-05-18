@@ -278,3 +278,52 @@ void monitoring(char *dirpath)
 		cur = cur->next;
 	}
 }
+
+Node *find_node(char *path)
+{
+	Node *cur = head;
+	while(cur != NULL)
+	{
+		if(!strcmp(path,cur->path))
+			return cur;
+		cur = cur->next;
+	}
+	return NULL;
+}
+
+void push_node(char *path, time_t mtime)
+{
+	Node *node = (Node *)malloc(sizeof(Node));
+	strcpy(node->path, path);
+	node->mtime = mtime;
+	node->next = NULL;
+	if(head == NULL)
+	{
+		head = node;
+		return;
+	}
+	Node *cur = head;
+	while(cur->next != NULL)
+		cur = cur->next;
+	cur->next = node;
+}
+
+void remove_node(char *path)
+{
+	Node *prev = NULL;
+	Node *cur = head;
+    while(cur != NULL)
+    {
+        if(!strcmp(path,cur->path))
+        {
+			if(prev == NULL)
+				head = cur->next;
+			else
+				prev->next = cur->next;
+			free(prev);
+			return;
+		}
+		prev = cur;
+        cur = cur->next;
+    }
+}
