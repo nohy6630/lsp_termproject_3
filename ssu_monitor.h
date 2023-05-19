@@ -7,6 +7,7 @@
 #include<sys/stat.h>
 #include<sys/types.h>
 #include<time.h>
+#include<fcntl.h>
 #define BUFLEN 1024
 
 typedef struct Node
@@ -20,8 +21,8 @@ typedef struct Node
 } Node;
 
 void ssu_monitor(int argc, char *argv[]);
-void ssu_prompt(int argc, char *argv[]);
-int execute_command(int argc, char *argv[]);
+void ssu_prompt();
+void execute_command(int argc, char *argv[]);
 void execute_add(int argc, char *argv[]);
 voidexecute_delete(int argc, char *argv[]);
 void execute_tree(int argc, char *argv[]);

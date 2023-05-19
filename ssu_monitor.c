@@ -18,7 +18,7 @@ void ssu_monitor(int argc, char *argv[]) {
     return;
 }
 
-void ssu_prompt(void)
+void ssu_prompt()
 {
 	char command[BUFLEN];
 	char* argv[100];
@@ -27,7 +27,8 @@ void ssu_prompt(void)
     while (1)
     {
 		printf("%s> ", ID);
-		fgets(command, BUFLEN, stdin);
+		fgets(command, BUFLEN - 1, stdin);
+		command[strlen(command) - 1] = 0;
 		argc = 0;
 		char *token = strtok(command," ");
 		while(token != NULL)
@@ -35,12 +36,11 @@ void ssu_prompt(void)
 			argv[argc++] = token;
 			token = strtok(NULL," ");
 		}
-		if(execute_command(argc, argv) == 1)
-			return;
+		execute_command(argc, argv);
     }
 }
 
-int execute_command(int argc, char *argv[]) 
+void execute_command(int argc, char *argv[]) 
 {
 	if (!strcmp(argv[0], "add")) 
 	{
@@ -60,7 +60,7 @@ int execute_command(int argc, char *argv[])
 	} 
 	else if (!strcmp(argv[0], "exit")) 
 	{
-		return 1;
+		exit(1);
 	} 
 	else 
 	{
@@ -141,6 +141,7 @@ void init_daemon(char *dirpath, time_t mn_time)
 {
 	char buf[BUFLEN];
 	FILE *monitor_fp;
+	pid_t pid, dpid;
 
 	if ((pid = fork()) < 0)
 	{
@@ -148,7 +149,7 @@ void init_daemon(char *dirpath, time_t mn_time)
 	}
 	else if (pid == 0)
 	{
-		if ((dpid = (makie_daemon())) < 0) 
+		if ((dpid = (make_daemon())) < 0) 
 		{
 			fprintf(stderr, "getpid error\n");
 			exit(1);
@@ -157,7 +158,7 @@ void init_daemon(char *dirpath, time_t mn_time)
 		monitor_fp = fopen(monitor_list, "a");
 		fprintf(monitor_fp, "%s %d\n", dirpath, dpid);
 		fclose(monitor_fp);
-		sprintf(buf, "%s/log.txt", dirpath)
+		sprintf(buf, "%s/log.txt", dirpath);
 		log_fp = fopen(buf, "a");
 		while (!signal_received)
 		{
@@ -218,7 +219,7 @@ int scandir_filter(const struct dirent *file) {
 
 void monitoring(char *dirpath)
 {
-	char dirent **filelist;
+	struct dirent **filelist;
 	int cnt=scandir(dirpath, &filelist, scandir_filter, alphasort);
 	char buf[BUFLEN];
 	char curtime[50];
@@ -235,7 +236,7 @@ void monitoring(char *dirpath)
 	for(int i = 0; i < cnt; i++)
 	{
 		sprintf(buf,"%s/%s",dirpath,filelist[cnt]->d_name);
-		stat(buf, statbuf);
+		stat(buf, &statbuf);
 		time(&now);
 		tm_p = localtime(&now);
 		sprintf(curtime, "%02d-%02d-%02d %02d:%02d:%02d",
@@ -271,7 +272,7 @@ void monitoring(char *dirpath)
 	Node *node;
 	while((node=get_removable_node()) != NULL)
 	{
-		fprintf(log_fp, "[%s][remove][%s]\n", curtime, cur->path);
+		fprintf(log_fp, "[%s][remove][%s]\n", curtime, node->path);
 		remove_node(node);
 	}
 }
@@ -302,13 +303,13 @@ Node *find_node(char *path, Node *parent)//parent 자식 노드들 중에서 해
 	if(parent == NULL)
 		cur = head;
 	else
-		cur = parnet->child;
+		cur = parent->child;
 	while(cur != NULL)
 	{
 		if(!strcmp(path,cur->path))
 			return cur;
 		sprintf(buf, "%s/", cur->path);
-		if(strstr(path, cur->path) == path)
+		if(strstr(path, buf) == path)
 			return find_node(path, cur);
 		cur = cur->next;
 	}
@@ -337,24 +338,24 @@ void push_node(Node *new,  Node *parent)
 			new->parent = parent;
 			return;
 		}
-        cur = parnet->child;
+        cur = parent->child;
 	}
 	while(cur->next != NULL)
 	{
 		sprintf(buf, "%s/", cur->path);
-        if(strstr(new->path, cur->path) == new->path)
-            return push_node(path, cur);
+        if(strstr(new->path, buf) == new->path)
+            return push_node(new->path, cur);
 		cur = cur->next;
 	}
 	cur->next = new;
 	new->prev = cur;
 }
 
-void create_node(char *path, time_t time)
+Node *create_node(char *path, time_t time)
 {
 	Node *new = (Node *)malloc(sizeof(Node));
     strcpy(new->path, path);
-    new->mtime = mtime;
+    new->mtime = time;
     new->next = NULL;
     new->child = NULL;
 	new->prev = NULL;
