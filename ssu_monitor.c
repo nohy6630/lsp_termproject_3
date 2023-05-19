@@ -1,6 +1,6 @@
 #include"ssu_monitor.h"
 
-FILE *log_fp;
+FILE *log_fp = NULL;
 char *ID = "20192492";
 char *monitor_list = "monitor_list.txt";
 volatile sig_atomic_t signal_received = 0;
@@ -123,7 +123,15 @@ void execute_delete(int argc, char *argv[]) {
 
 void execute_tree(int argc, char *argv[])
 {
+	char real_path[BUFLEN];
+
+	realpath(argv[1], real_path);
+	printf("%s\n", strrchr(real_path, '/')+1);
+	//log_fp=stdout;
+	monitoring(real_path);
 	print_tree(NULL, 0);
+	while(head)
+		remove_node(head);
 }
 
 void execute_help(int argc, char *argv[])
@@ -203,7 +211,8 @@ pid_t make_daemon(void)
 	return getpid();
 }
 
-void signal_handler(int signum) {
+void signal_handler(int signum)
+{
 	signal_received = 1;
 }
 
@@ -235,7 +244,8 @@ void monitoring(char *dirpath)
 	}
 	for(int i = 0; i < cnt; i++)
 	{
-		sprintf(buf,"%s/%s",dirpath,filelist[cnt]->d_name);
+		sprintf(buf,"%s/%s",dirpath,filelist[i]->d_name);
+		//printf("%s\n",buf);
 		stat(buf, &statbuf);
 		time(&now);
 		tm_p = localtime(&now);
@@ -245,12 +255,13 @@ void monitoring(char *dirpath)
 							tm_p->tm_mday,
 							tm_p->tm_hour,
 							tm_p->tm_min,
-							tm_p->tm_sec);		
+							tm_p->tm_sec);
 		Node *node = find_node(buf, NULL);
-		if(buf == NULL)
+		if(node == NULL)
 		{
 			push_node(create_node(buf, statbuf.st_mtime), NULL);
-			fprintf(log_fp, "[%s][create][%s]\n", curtime, buf);
+			if(log_fp)
+				fprintf(log_fp, "[%s][create][%s]\n", curtime, buf);
 		}
 		else
 		{
@@ -265,14 +276,20 @@ void monitoring(char *dirpath)
                             tm_p->tm_hour,
                             tm_p->tm_min,
                             tm_p->tm_sec);
-				fprintf(log_fp, "[%s][modify][%s]\n", modifytime, buf);
+				if(log_fp)
+					fprintf(log_fp, "[%s][modify][%s]\n", modifytime, buf);
 			}
 		}
+		if(filelist[i]->d_type == DT_DIR)
+        {
+            monitoring(buf);
+        }
 	}
 	Node *node;
 	while((node=get_removable_node()) != NULL)
 	{
-		fprintf(log_fp, "[%s][remove][%s]\n", curtime, node->path);
+		if(log_fp)
+			fprintf(log_fp, "[%s][remove][%s]\n", curtime, node->path);
 		remove_node(node);
 	}
 }
@@ -343,12 +360,18 @@ void push_node(Node *new,  Node *parent)
 	while(cur->next != NULL)
 	{
 		sprintf(buf, "%s/", cur->path);
+		//printf("strstr(%s,%s)==%s\n",new->path,buf,strstr(new->path,buf));
         if(strstr(new->path, buf) == new->path)
             return push_node(new->path, cur);
 		cur = cur->next;
 	}
+	sprintf(buf, "%s/", cur->path);
+    //printf("strstr(%s,%s)==%s\n",new->path,buf,strstr(new->path,buf));
+    if(strstr(new->path, buf) == new->path)
+        return push_node(new->path, cur);
 	cur->next = new;
 	new->prev = cur;
+	new->parent = cur->parent;
 }
 
 Node *create_node(char *path, time_t time)
@@ -365,6 +388,7 @@ Node *create_node(char *path, time_t time)
 
 void remove_node(Node *node)
 {
+	//printf("remove_node(%s) start\n",node->path);
 	while(node->child)
 		remove_node(node->child);
 	if(node->parent)
@@ -381,6 +405,7 @@ void remove_node(Node *node)
 		node->next->prev = node->prev;
 	if(node->prev)
 		node->prev = node->next;
+	//printf("remove_node(%s) end\n",node->path);
 	free(node);
 }
 
@@ -396,7 +421,7 @@ void print_tree(Node *parent, int depth)
 	{
 		for(int i = 0; i < depth; i++)
 			printf("|    ");
-		printf("|----%s\n",strrchr(cur->path, '/'));
+		printf("|----%s\n",strrchr(cur->path, '/') + 1);
 		print_tree(cur, depth + 1);
 		cur = cur->next;
 	}

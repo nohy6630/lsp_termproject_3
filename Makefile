@@ -11,3 +11,5 @@ $(MONITOR).o : $(MONITOR).h
 clean :
 	rm -rf $(MONITOR)
 	rm -rf *.o
+
+re : clean $(MONITOR)
