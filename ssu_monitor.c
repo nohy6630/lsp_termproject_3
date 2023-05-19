@@ -60,7 +60,6 @@ int execute_command(int argc, char *argv[])
 	} 
 	else if (!strcmp(argv[0], "exit")) 
 	{
-		execute_exit(argc, argv);
 		return 1;
 	} 
 	else 
@@ -122,16 +121,20 @@ void execute_delete(int argc, char *argv[]) {
 	rename(tmp_file, monitor_list);
 }	
 
-void execute_tree(int argc, char *argv[]) {
-
+void execute_tree(int argc, char *argv[])
+{
+	print_tree(NULL, 0);
 }
 
-void execute_help(int argc, char *argv[]) {
-
-}
-
-void execute_exit(int argc, char *argv[]) {
-
+void execute_help(int argc, char *argv[])
+{
+	printf("Usage:\n");
+	printf(" > add <DIRPATH> [OPTION]\n");
+	printf("   -t <TIME> : set monitoring time\n");
+    printf(" > delete <DAEMON_PID>n");
+    printf(" > tree <DIRPATH>\n");
+    printf(" > help\n");
+    printf(" > exit\n");
 }
 
 void init_daemon(char *dirpath, time_t mn_time)
@@ -145,7 +148,7 @@ void init_daemon(char *dirpath, time_t mn_time)
 	}
 	else if (pid == 0)
 	{
-		if ((dpid = (make_daemon())) < 0) 
+		if ((dpid = (makie_daemon())) < 0) 
 		{
 			fprintf(stderr, "getpid error\n");
 			exit(1);
@@ -199,51 +202,6 @@ pid_t make_daemon(void)
 	return getpid();
 }
 
-
-tree *create_node(char *path, mode_t mode, time_t mtime) 
-{
-	tree *new;
-
-	new = (tree *)malloc(sizeof(tree));
-	strcpy(new->path, path);
-	new->isEnd = false;
-	new->mode = mode;
-	new->mtime = mtime;
-	new->next = NULL;
-	new->prev = NULL;
-	new->child = NULL;
-	new->parent = NULL;
-
-	return new;
-}
-
-void make_tree(tree *dir, char *path) {
-	if ((count = scandir(path, &filelist, scandir_filter, alphasort)) < 0) {
-		fprintf(stderr, "in function make_tree: scandir error for %s\n", path);
-		return;
-	}
-	
-	for (i = 0; i < count; i++) {
-
-	}
-}
-
-void compare_tree(tree *old, tree *new) {
-
-}
-
-void print_tree(tree *node) {
-	if (node == NULL) return;
-
-	printf("%s\n", node->path);
-	print_tree(node->child);
-	print_tree(node->next);
-}
-
-void free_tree(tree *cur) {
-
-}
-
 void signal_handler(int signum) {
 	signal_received = 1;
 }
@@ -287,10 +245,10 @@ void monitoring(char *dirpath)
 							tm_p->tm_hour,
 							tm_p->tm_min,
 							tm_p->tm_sec);		
-		Node *node = find_node(buf);
+		Node *node = find_node(buf, NULL);
 		if(buf == NULL)
 		{
-			push_node(buf, statbuf.st_mtime);
+			push_node(create_node(buf, statbuf.st_mtime), NULL);
 			fprintf(log_fp, "[%s][create][%s]\n", curtime, buf);
 		}
 		else
@@ -310,62 +268,135 @@ void monitoring(char *dirpath)
 			}
 		}
 	}
-	Node *cur = head;
-	while(cur != NULL)
+	Node *node;
+	while((node=get_removable_node()) != NULL)
 	{
-		if(access(cur->path, F_OK) != 0)
-		{
-			fprintf(log_fp, "[%s][remove][%s]\n", curtime, cur->path);
-		}
-		cur = cur->next;
+		fprintf(log_fp, "[%s][remove][%s]\n", curtime, cur->path);
+		remove_node(node);
 	}
 }
 
-Node *find_node(char *path)
+Node *get_removable_node()
 {
 	Node *cur = head;
+	while(cur)
+	{
+		if(access(cur->path, F_OK) != 0)
+			return cur;
+		if(cur->child)
+			cur = cur->child;
+		else if(cur->next)
+			cur = cur->next;
+		else if(cur->parent)
+			cur = cur->parent->next;
+		else
+			cur = NULL;
+	}
+}
+
+Node *find_node(char *path, Node *parent)//parent 자식 노드들 중에서 해당 노드를 찾는다.
+{
+	Node *cur;
+	char buf[BUFLEN];
+
+	if(parent == NULL)
+		cur = head;
+	else
+		cur = parnet->child;
 	while(cur != NULL)
 	{
 		if(!strcmp(path,cur->path))
 			return cur;
+		sprintf(buf, "%s/", cur->path);
+		if(strstr(path, cur->path) == path)
+			return find_node(path, cur);
 		cur = cur->next;
 	}
 	return NULL;
 }
 
-void push_node(char *path, time_t mtime)
+void push_node(Node *new,  Node *parent)
 {
-	Node *node = (Node *)malloc(sizeof(Node));
-	strcpy(node->path, path);
-	node->mtime = mtime;
-	node->next = NULL;
-	if(head == NULL)
-	{
-		head = node;
-		return;
-	}
-	Node *cur = head;
-	while(cur->next != NULL)
-		cur = cur->next;
-	cur->next = node;
-}
+	char buf[BUFLEN];
 
-void remove_node(char *path)
-{
-	Node *prev = NULL;
-	Node *cur = head;
-    while(cur != NULL)
-    {
-        if(!strcmp(path,cur->path))
-        {
-			if(prev == NULL)
-				head = cur->next;
-			else
-				prev->next = cur->next;
-			free(prev);
+	Node *cur;
+	if(parent == NULL)
+	{
+		if(head == NULL)
+		{
+			head = new;
 			return;
 		}
-		prev = cur;
-        cur = cur->next;
-    }
+        cur = head;
+	}
+    else
+	{
+		if(parent->child == NULL)
+		{
+			parent->child = new;
+			new->parent = parent;
+			return;
+		}
+        cur = parnet->child;
+	}
+	while(cur->next != NULL)
+	{
+		sprintf(buf, "%s/", cur->path);
+        if(strstr(new->path, cur->path) == new->path)
+            return push_node(path, cur);
+		cur = cur->next;
+	}
+	cur->next = new;
+	new->prev = cur;
+}
+
+void create_node(char *path, time_t time)
+{
+	Node *new = (Node *)malloc(sizeof(Node));
+    strcpy(new->path, path);
+    new->mtime = mtime;
+    new->next = NULL;
+    new->child = NULL;
+	new->prev = NULL;
+	new->parent = NULL;
+	return new;
+}
+
+void remove_node(Node *node)
+{
+	while(node->child)
+		remove_node(node->child);
+	if(node->parent)
+	{
+		if(node->parent->child == node)
+			node->parent->child = node->next;
+	}
+	else
+	{
+		if(head == node)
+			head = node->next;
+	}
+	if(node->next)
+		node->next->prev = node->prev;
+	if(node->prev)
+		node->prev = node->next;
+	free(node);
+}
+
+void print_tree(Node *parent, int depth)
+{
+	Node *cur;
+
+	if(parent == NULL)
+		cur = head;
+	else
+		cur = parent->child;
+	while(cur != NULL)
+	{
+		for(int i = 0; i < depth; i++)
+			printf("|    ");
+		printf("|----%s\n",strrchr(cur->path, '/'));
+		print_tree(cur, depth + 1);
+		cur = cur->next;
+	}
 }
