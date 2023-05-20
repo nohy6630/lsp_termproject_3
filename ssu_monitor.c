@@ -5,6 +5,7 @@ char *ID = "20192492";
 char *monitor_list = "monitor_list.txt";
 volatile sig_atomic_t signal_received = 0;
 Node *head = NULL;
+int isInited=0;
 
 int main(int argc, char *argv[])
 {
@@ -74,7 +75,7 @@ void execute_add(int argc, char *argv[])
 {
 	int c;
 	char real_path[BUFLEN];
-	time_t mn_time;
+	time_t mn_time = 1;
 
 	while((c = getopt(argc, argv, "t:")) != -1)
 	{
@@ -128,6 +129,7 @@ void execute_tree(int argc, char *argv[])
 	realpath(argv[1], real_path);
 	printf("%s\n", strrchr(real_path, '/')+1);
 	//log_fp=stdout;
+	//isInited=1;
 	monitoring(real_path);
 	print_tree(NULL, 0);
 	while(head)
@@ -139,7 +141,7 @@ void execute_help(int argc, char *argv[])
 	printf("Usage:\n");
 	printf(" > add <DIRPATH> [OPTION]\n");
 	printf("   -t <TIME> : set monitoring time\n");
-    printf(" > delete <DAEMON_PID>n");
+    printf(" > delete <DAEMON_PID>\n");
     printf(" > tree <DIRPATH>\n");
     printf(" > help\n");
     printf(" > exit\n");
@@ -167,10 +169,13 @@ void init_daemon(char *dirpath, time_t mn_time)
 		fprintf(monitor_fp, "%s %d\n", dirpath, dpid);
 		fclose(monitor_fp);
 		sprintf(buf, "%s/log.txt", dirpath);
-		log_fp = fopen(buf, "a");
 		while (!signal_received)
 		{
+			log_fp=fopen(buf,"a");
 			monitoring(dirpath);
+			isInited=1;
+			fprintf(log_fp,"fclose(log_fp)\n");
+			fclose(log_fp);
 			sleep(mn_time);
 		}
 		fclose(log_fp);
@@ -200,12 +205,15 @@ pid_t make_daemon(void)
 
 	maxfd = getdtablesize();
 	for (fd = 0; fd < maxfd; fd++) //for debug , fd=3
+	{
 		close(fd);
+	}
 	
 	umask(0);
 	//	chdir("/");
 	fd = open("/dev/null", O_RDWR);//stdin무시
 	dup(0);//stdout무시
+	//open("error_log.txt",O_RDWR);
 	dup(0);//stderr무시
 	
 	return getpid();
@@ -219,7 +227,8 @@ void signal_handler(int signum)
 int scandir_filter(const struct dirent *file) {
 	if (!strcmp(file->d_name, ".") || !strcmp(file->d_name, "..")
 			|| !strcmp(file->d_name, "log.txt")
-			|| !strcmp(file->d_name, monitor_list)) {
+			|| !strcmp(file->d_name, monitor_list)
+			|| file->d_type != DT_REG) {
 		return 0;
 	}
 	else
@@ -260,7 +269,7 @@ void monitoring(char *dirpath)
 		if(node == NULL)
 		{
 			push_node(create_node(buf, statbuf.st_mtime), NULL);
-			if(log_fp)
+			if(log_fp&&isInited)
 				fprintf(log_fp, "[%s][create][%s]\n", curtime, buf);
 		}
 		else
@@ -276,7 +285,7 @@ void monitoring(char *dirpath)
                             tm_p->tm_hour,
                             tm_p->tm_min,
                             tm_p->tm_sec);
-				if(log_fp)
+				if(log_fp&&isInited)
 					fprintf(log_fp, "[%s][modify][%s]\n", modifytime, buf);
 			}
 		}
@@ -286,19 +295,24 @@ void monitoring(char *dirpath)
         }
 	}
 	Node *node;
+	//printf("a\n");
 	while((node=get_removable_node()) != NULL)
 	{
-		if(log_fp)
+		//printf("node: %s",node->path);
+		if(log_fp&&isInited)
 			fprintf(log_fp, "[%s][remove][%s]\n", curtime, node->path);
 		remove_node(node);
 	}
+	//printf("b\n");
 }
 
 Node *get_removable_node()
 {
+	//printf("get_removable_node() start\n");
 	Node *cur = head;
 	while(cur)
 	{
+		//printf("cur->path: %s\n", cur->path);
 		if(access(cur->path, F_OK) != 0)
 			return cur;
 		if(cur->child)
@@ -310,6 +324,8 @@ Node *get_removable_node()
 		else
 			cur = NULL;
 	}
+	//printf("get_removable_node() end\n");
+	return NULL;
 }
 
 Node *find_node(char *path, Node *parent)//parent 자식 노드들 중에서 해당 노드를 찾는다.
@@ -388,7 +404,7 @@ Node *create_node(char *path, time_t time)
 
 void remove_node(Node *node)
 {
-	//printf("remove_node(%s) start\n",node->path);
+	fprintf(log_fp,"remove_node(%s) start\n",node->path);
 	while(node->child)
 		remove_node(node->child);
 	if(node->parent)
@@ -405,7 +421,7 @@ void remove_node(Node *node)
 		node->next->prev = node->prev;
 	if(node->prev)
 		node->prev = node->next;
-	//printf("remove_node(%s) end\n",node->path);
+	fprintf(log_fp,"remove_node(%s) end\n",node->path);
 	free(node);
 }
 
