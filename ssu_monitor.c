@@ -77,56 +77,119 @@ void execute_add(int argc, char *argv[])
 	char real_path[BUFLEN];
 	time_t mn_time = 1;
 
-	while((c = getopt(argc, argv, "t:")) != -1)
+	printf("argc: %d\n",argc);
+	for(int i=0;i<argc;i++)
+		printf("%s\n",argv[i]);
+	
+	if(argc>=3)
 	{
-		switch(c)
+		if(strcmp("-t",argv[2]))
 		{
-			case 't':
-				mn_time = atoi(optarg);
-				if(mn_time == 0)
-				{
-					fprintf(stderr, "mntime is 0 OR atoi error\n");
-					return;
-				}
-				break;
-			case '?':
-				fprintf(stderr, "argv option error\n");
-				return;
+			fprintf(stderr,"Usage : add <DIRPATH> [OPTION]\n");
+			return;
 		}
+		else if(argc<4||atoi(argv[3])==0)
+		{
+			fprintf(stderr,"Usage : add <DIRPATH> [OPTION]\n");
+			return;
+		}
+		mn_time=atoi(argv[3]);
 	}
+	if(argc < 1 || access(argv[1],F_OK)!=0)
+	{
+		fprintf(stderr,"Usage : add <DIRPATH> [OPTION]\n");
+		return;
+	}
+
+	FILE* fp = fopen(monitor_list, "a+");
+	char buf[BUFLEN];
+
 	realpath(argv[1],real_path);
+
+	while(fgets(buf, BUFLEN, fp) != NULL)
+    {
+        char *dirpath = strtok(buf, " ");
+		pid_t pid = atoi(strtok(NULL, " "));
+        if(!strcmp(dirpath, real_path))
+        {
+			fprintf(stderr, "directory is already monitoring\n");
+			fclose(fp);
+            return;
+        }
+    }
+
 	init_daemon(real_path, mn_time);
 	printf("monitoring started (%s)\n", real_path);
+	fclose(fp);
 	return;
 }
 
 void execute_delete(int argc, char *argv[]) {
 	char *tmp_file=".delete_tmp";
-	FILE* fp = fopen(monitor_list, "r");
-	FILE* wfp = fopen(tmp_file, "w");
 	char buf[BUFLEN];
 	pid_t input_pid= atoi(argv[1]);
+	int chk = 0;
+
+	if(argc !=2)
+	{
+		fprintf(stderr, "Usage: delete <DAEMON_PID>\n");
+		return;
+	}
+
+	FILE* fp = fopen(monitor_list, "a+");
+    FILE* wfp = fopen(tmp_file, "w+");
+
 
 	while(fgets(buf, BUFLEN, fp) != NULL)
 	{
-
-		strtok(buf, " ");
+		char * dirpath = strtok(buf, " ");
 		pid_t pid = atoi(strtok(NULL, " "));
 		if(pid == input_pid)
+		{
 			kill(pid, SIGUSR1);
+			printf("monitoring ended (%s)\n", dirpath);
+			chk = 1;
+		}
 		else
-			fprintf(wfp, "%s", buf);
+			fprintf(wfp, "%s %d\n", dirpath, pid);
 	}
-	close(fp);
-	close(wfp);
-	rename(tmp_file, monitor_list);
+	fclose(fp);
+	fclose(wfp);
+	if(!chk)
+	{
+		remove(tmp_file);
+		fprintf(stderr,"directory is not monitoring\n");
+	}
+	else
+	{
+		rename(tmp_file,monitor_list);
+	}
 }	
 
 void execute_tree(int argc, char *argv[])
 {
 	char real_path[BUFLEN];
+	int chk=0;
+	FILE* fp = fopen(monitor_list, "a+");
+    char buf[BUFLEN];
 
-	realpath(argv[1], real_path);
+    realpath(argv[1],real_path);
+
+    while(fgets(buf, BUFLEN, fp) != NULL)
+    {
+        char *dirpath = strtok(buf, " ");
+        pid_t pid = atoi(strtok(NULL, " "));
+        if(!strcmp(dirpath, real_path))
+        {
+			chk=1;
+        }
+    }
+	fclose(fp);
+	if(!chk)
+	{
+		fprintf(stderr, "directory is not monitoring\n");
+		return;
+	}
 	printf("%s\n", strrchr(real_path, '/')+1);
 	//log_fp=stdout;
 	//isInited=1;
@@ -165,7 +228,7 @@ void init_daemon(char *dirpath, time_t mn_time)
 			exit(1);
 		}
 		signal(SIGUSR1, signal_handler);
-		monitor_fp = fopen(monitor_list, "a");
+		monitor_fp = fopen(monitor_list, "a+");
 		fprintf(monitor_fp, "%s %d\n", dirpath, dpid);
 		fclose(monitor_fp);
 		sprintf(buf, "%s/log.txt", dirpath);
@@ -179,7 +242,7 @@ void init_daemon(char *dirpath, time_t mn_time)
 			sleep(mn_time);
 		}
 		fclose(log_fp);
-		printf("monitoring ended (%s)\n", dirpath);
+		//fprintf(stdout,"monitoring ended (%s)\n", dirpath);
 		exit(0);
 	}
 	else
