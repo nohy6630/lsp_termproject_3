@@ -174,7 +174,7 @@ void init_daemon(char *dirpath, time_t mn_time)
 			log_fp=fopen(buf,"a");
 			monitoring(dirpath);
 			isInited=1;
-			fprintf(log_fp,"fclose(log_fp)\n");
+			//fprintf(log_fp,"fclose(log_fp)\n");
 			fclose(log_fp);
 			sleep(mn_time);
 		}
@@ -228,7 +228,7 @@ int scandir_filter(const struct dirent *file) {
 	if (!strcmp(file->d_name, ".") || !strcmp(file->d_name, "..")
 			|| !strcmp(file->d_name, "log.txt")
 			|| !strcmp(file->d_name, monitor_list)
-			|| file->d_type != DT_REG) {
+			|| (file->d_type != DT_REG && file->d_type != DT_DIR)) {
 		return 0;
 	}
 	else
@@ -295,28 +295,31 @@ void monitoring(char *dirpath)
         }
 	}
 	Node *node;
-	//printf("a\n");
+	//fprintf(log_fp,"a\n");
 	while((node=get_removable_node()) != NULL)
 	{
-		//printf("node: %s",node->path);
+		//fprintf(log_fp, "node: %s\n",node->path);
 		if(log_fp&&isInited)
 			fprintf(log_fp, "[%s][remove][%s]\n", curtime, node->path);
 		remove_node(node);
 	}
-	//printf("b\n");
+	//fprintf(log_fp,"b\n");
 }
 
 Node *get_removable_node()
 {
-	//printf("get_removable_node() start\n");
+	//fprintf(log_fp,"get_removable_node() start\n");
 	Node *cur = head;
 	while(cur)
 	{
-		//printf("cur->path: %s\n", cur->path);
-		if(access(cur->path, F_OK) != 0)
-			return cur;
 		if(cur->child)
 			cur = cur->child;
+		//fprintf(log_fp,"cur->path: %s\n", cur->path);
+		if(access(cur->path, F_OK) != 0)
+		{
+			//fprintf(log_fp, "get_removable_node() return %s\n",cur->path);
+			return cur;
+		}
 		else if(cur->next)
 			cur = cur->next;
 		else if(cur->parent)
@@ -324,7 +327,7 @@ Node *get_removable_node()
 		else
 			cur = NULL;
 	}
-	//printf("get_removable_node() end\n");
+	//fprintf(log_fp,"get_removable_node()  return NULL end\n");
 	return NULL;
 }
 
@@ -404,7 +407,7 @@ Node *create_node(char *path, time_t time)
 
 void remove_node(Node *node)
 {
-	fprintf(log_fp,"remove_node(%s) start\n",node->path);
+	//fprintf(log_fp,"remove_node(%s) start\n",node->path);
 	while(node->child)
 		remove_node(node->child);
 	if(node->parent)
@@ -420,8 +423,8 @@ void remove_node(Node *node)
 	if(node->next)
 		node->next->prev = node->prev;
 	if(node->prev)
-		node->prev = node->next;
-	fprintf(log_fp,"remove_node(%s) end\n",node->path);
+		node->prev->next = node->next;
+	//fprintf(log_fp,"remove_node(%s) end\n",node->path);
 	free(node);
 }
 
