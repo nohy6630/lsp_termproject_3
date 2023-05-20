@@ -77,9 +77,11 @@ void execute_add(int argc, char *argv[])
 	char real_path[BUFLEN];
 	time_t mn_time = 1;
 
+	/*
 	printf("argc: %d\n",argc);
 	for(int i=0;i<argc;i++)
 		printf("%s\n",argv[i]);
+		*/
 	
 	if(argc>=3)
 	{
@@ -385,10 +387,18 @@ Node *get_removable_node()
 		}
 		else if(cur->next)
 			cur = cur->next;
-		else if(cur->parent)
-			cur = cur->parent->next;
 		else
-			cur = NULL;
+		{
+			while(cur->parent&&cur->parent->next==NULL)
+			{
+				cur=cur->parent;
+			}
+			if(cur->parent)
+				cur=cur->parent->next;
+			else
+				cur=NULL;
+
+		}
 	}
 	//fprintf(log_fp,"get_removable_node()  return NULL end\n");
 	return NULL;
@@ -502,7 +512,9 @@ void print_tree(Node *parent, int depth)
 	while(cur != NULL)
 	{
 		for(int i = 0; i < depth; i++)
-			printf("|    ");
+		{
+			printf("     ");
+		}
 		printf("|----%s\n",strrchr(cur->path, '/') + 1);
 		print_tree(cur, depth + 1);
 		cur = cur->next;
